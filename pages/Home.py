@@ -107,7 +107,7 @@ def sum_durations(duration_series: pd.Series) -> str:
 
 
 def main():
-    st.set_page_config(page_title="Daily Timesheet", layout="wide")
+    st.set_page_config(page_title="MyTimes | Home", layout="wide")
     st.title("Daily Timesheet")
 
     conn = init_db()

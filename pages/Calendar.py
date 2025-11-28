@@ -89,7 +89,7 @@ def build_events(times_df: pd.DataFrame) -> list:
 
 
 if __name__ == "__main__":
-    st.set_page_config(page_title="Calendar View", layout="wide")
+    st.set_page_config(page_title="MyTimes | Calendar", layout="wide")
 
     # Connect to DB and load data
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)

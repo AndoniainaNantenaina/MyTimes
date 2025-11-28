@@ -34,6 +34,7 @@ def init_projects_table(conn: sqlite3.Connection):
 
 
 def projects():
+    st.set_page_config(page_title="MyTimes | Projects", layout="wide")
     st.title("Projects")
 
     conn = get_conn()
