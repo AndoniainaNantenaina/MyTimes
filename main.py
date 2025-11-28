@@ -1,12 +1,18 @@
 import datetime
+import os
 import sqlite3
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 import streamlit as st
 
-DB_PATH = "timesheets.db"
+# Store the SQLite DB file in the current user's home directory
+# This works across Linux and Windows (Path.home() resolves appropriately).
+DB_PATH = str(Path.home() / ".mytimes" / "timesheets.db")
 
+# Ensure the directory exists
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 def init_db(path: str = DB_PATH):
     conn = sqlite3.connect(path, check_same_thread=False)
@@ -16,6 +22,7 @@ def init_db(path: str = DB_PATH):
 		CREATE TABLE IF NOT EXISTS timesheets (
 			id INTEGER PRIMARY KEY,
 			date TEXT,
+            todo TEXT,
 			title TEXT,
 			description TEXT,
 			start_time TEXT,
@@ -57,6 +64,7 @@ def compute_duration(start_str: str, end_str: str) -> str:
 def add_entry(
     conn: sqlite3.Connection,
     date: str,
+    todo: str,
     title: str,
     description: str,
     start: str,
@@ -65,8 +73,8 @@ def add_entry(
     duration = compute_duration(start, end)
     c = conn.cursor()
     c.execute(
-        "INSERT INTO timesheets (date, title, description, start_time, end_time, duration) VALUES (?, ?, ?, ?, ?, ?)",
-        (date, title, description, start, end, duration),
+        "INSERT INTO timesheets (date, todo, title, description, start_time, end_time, duration) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (date, todo, title, description, start, end, duration),
     )
     conn.commit()
     return c.lastrowid
@@ -75,13 +83,13 @@ def add_entry(
 def get_entries(conn: sqlite3.Connection, date: Optional[str] = None) -> pd.DataFrame:
     if date:
         df = pd.read_sql_query(
-            "SELECT id, date, title, description, start_time, end_time, duration FROM timesheets WHERE date = ? ORDER BY start_time",
+            "SELECT id, date, todo, title, description, start_time, end_time, duration FROM timesheets WHERE date = ? ORDER BY start_time",
             conn,
             params=(date,),
         )
     else:
         df = pd.read_sql_query(
-            "SELECT id, date, title, description, start_time, end_time, duration FROM timesheets ORDER BY date, start_time",
+            "SELECT id, date, todo, title, description, start_time, end_time, duration FROM timesheets ORDER BY date, start_time",
             conn,
         )
     return df
@@ -107,14 +115,18 @@ def main():
     conn = init_db()
 
     st.header("Add Timesheet Entry")
-    col1, col2 = st.columns([1, 1])
+    entry_date = st.date_input("Date", value=datetime.date.today())
+    col1, col2, col3, col4, col5 = st.columns([1, 2, 3, 1, 1])
     with col1:
-        entry_date = st.date_input("Date", value=datetime.date.today())
-        title = st.text_input("Task Title", max_chars=200)
-        start_time = st.text_input("Start Time (HH:MM or HH:MM:SS)", value="08:00")
+        todo = st.text_input("TODO", max_chars=200, placeholder="TODO-123")
     with col2:
-        description = st.text_area("Task Description", height=120)
-        end_time = st.text_input("End Time (HH:MM or HH:MM:SS)", value="09:00")
+        title = st.text_input("Task Title", max_chars=200)
+    with col3:
+        description = st.text_input("Task Description", max_chars=500)
+    with col4:
+        start_time = st.text_input("Start Time (HH:MM)", value="08:00")
+    with col5:
+        end_time = st.text_input("End Time (HH:MM)", value="09:00")
 
     # show computed duration live
     try:
@@ -123,7 +135,7 @@ def main():
     except Exception as e:
         st.markdown(f"**Duration:** — (enter valid start and end times) (`{e}`)")
 
-    if st.button("Add Entry"):
+    if st.button("Add Entry", disabled=not all([todo, title, start_time, end_time])):
         if not title.strip():
             st.error("Please enter a task title.")
         else:
@@ -132,6 +144,7 @@ def main():
                 add_entry(
                     conn,
                     iso_date,
+                    todo.strip(),
                     title.strip(),
                     description.strip(),
                     start_time.strip(),
