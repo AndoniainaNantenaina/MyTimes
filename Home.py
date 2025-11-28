@@ -1,15 +1,13 @@
 import datetime
 import os
 import sqlite3
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 import streamlit as st
 
-# Store the SQLite DB file in the current user's home directory
-# This works across Linux and Windows (Path.home() resolves appropriately).
-DB_PATH = str(Path.home() / ".mytimes" / "timesheets.db")
+from lib import projects as projects_lib
+from lib.constants import DB_PATH
 
 # Ensure the directory exists
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -116,11 +114,38 @@ def main():
 
     st.header("Add Timesheet Entry")
     entry_date = st.date_input("Date", value=datetime.date.today())
+
+    # Load projects and provide a dropdown to pick an existing project.
+    # When a project is selected, autofill the TODO and title fields.
+    try:
+        projects_df = projects_lib.get_projects(sqlite3.connect(DB_PATH, check_same_thread=False))
+    except Exception:
+        projects_df = pd.DataFrame()
+
+    project_options = ["(new project)"]
+    if not projects_df.empty:
+        # `get_projects` sets index to `todo_id`
+        project_options += list(projects_df.index.astype(str))
+
+    selected_project = st.selectbox("Select project (choose to autofill TODO/title)", project_options)
+
+    if selected_project != "(new project)" and not projects_df.empty:
+        todo_default = selected_project
+        # safe access in case of single-row Series
+        try:
+            title_default = projects_df.loc[selected_project, "title"]
+        except Exception:
+            # if loc returns a Series when reset_index wasn't used
+            title_default = projects_df.loc[selected_project]["title"]
+    else:
+        todo_default = ""
+        title_default = ""
+
     col1, col2, col3, col4, col5 = st.columns([1, 2, 3, 1, 1])
     with col1:
-        todo = st.text_input("TODO", max_chars=200, placeholder="TODO-123")
+        todo = st.text_input("TODO", value=todo_default, max_chars=200, placeholder="TODO-123")
     with col2:
-        title = st.text_input("Task Title", max_chars=200)
+        title = st.text_input("Task Title", value=title_default, max_chars=200)
     with col3:
         description = st.text_input("Task Description", max_chars=500)
     with col4:

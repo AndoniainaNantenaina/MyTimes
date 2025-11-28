@@ -5,5 +5,6 @@ description = "A personal time tracking application made with Streamlit 🎈."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "pyinstaller>=6.17.0",
     "streamlit>=1.51.0",
 ]
