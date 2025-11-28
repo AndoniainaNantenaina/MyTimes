@@ -12,7 +12,7 @@ from lib.constants import DB_PATH
 # Ensure the directory exists
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
-def init_db(path: str = DB_PATH):
+def init_db(path: str = DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     c = conn.cursor()
     c.execute(
