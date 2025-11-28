@@ -113,7 +113,7 @@ def main():
     conn = init_db()
 
     st.header("Add Timesheet Entry")
-    entry_date = st.date_input("Date", value=datetime.date.today())
+    entry_date = st.date_input("Date", value=datetime.date.today(), disabled=True)
 
     # Load projects and provide a dropdown to pick an existing project.
     # When a project is selected, autofill the TODO and title fields.
@@ -122,14 +122,20 @@ def main():
     except Exception:
         projects_df = pd.DataFrame()
 
-    project_options = ["(new project)"]
+    project_options = ["-- Please select a project --"]
     if not projects_df.empty:
         # `get_projects` sets index to `todo_id`
         project_options += list(projects_df.index.astype(str))
 
-    selected_project = st.selectbox("Select project (choose to autofill TODO/title)", project_options)
+    selected_project = st.selectbox(
+        "Select project (choose to autofill TODO/title)",
+        project_options,
+        format_func=lambda x: x
+        if x == "-- Please select a project --"
+        else f"{x} - {projects_df.loc[x, 'title']}",
+    )
 
-    if selected_project != "(new project)" and not projects_df.empty:
+    if selected_project != "-- Please select a project --" and not projects_df.empty:
         todo_default = selected_project
         # safe access in case of single-row Series
         try:
@@ -143,15 +149,41 @@ def main():
 
     col1, col2, col3, col4, col5 = st.columns([1, 2, 3, 1, 1])
     with col1:
-        todo = st.text_input("TODO", value=todo_default, max_chars=200, placeholder="TODO-123")
+        todo = st.text_input(
+            "TODO",
+            value=todo_default,
+            max_chars=200,
+            placeholder="TODO-123",
+            disabled=True,
+        )
     with col2:
-        title = st.text_input("Task Title", value=title_default, max_chars=200)
+        title = st.text_input(
+            "Task Title",
+            value=title_default,
+            max_chars=200,
+            disabled=True,
+        )
     with col3:
         description = st.text_input("Task Description", max_chars=500)
+
+    now = datetime.datetime.now()
+    one_hour_later = now + datetime.timedelta(hours=1)
+
     with col4:
-        start_time = st.text_input("Start Time (HH:MM)", value="08:00")
+        # start_time = st.text_input("Start Time (HH:MM)", value=now.strftime("%H:%M"))
+        start_time = st.time_input(
+            "Start Time",
+            key="start_time_placeholder",
+            value=now.time(),
+            step=60 * 5,
+        ).strftime("%H:%M")
     with col5:
-        end_time = st.text_input("End Time (HH:MM)", value="09:00")
+        end_time = st.time_input(
+            "End Time",
+            key="end_time_placeholder",
+            value=one_hour_later.time(),
+            step=60 * 5,
+        ).strftime("%H:%M")
 
     # show computed duration live
     try:
@@ -160,7 +192,12 @@ def main():
     except Exception as e:
         st.markdown(f"**Duration:** — (enter valid start and end times) (`{e}`)")
 
-    if st.button("Add Entry", disabled=not all([todo, title, start_time, end_time])):
+    if st.button(
+        "Add Entry",
+        disabled=not all([todo, title, description, start_time, end_time]),
+        type="primary",
+        icon=":material/add_task:",
+    ):
         if not title.strip():
             st.error("Please enter a task title.")
         else:
@@ -180,29 +217,37 @@ def main():
                 st.error(f"Failed to add entry: {e}")
 
     st.header("View Timesheets")
-    view_col1, view_col2 = st.columns([1, 3])
+    view_col1, view_col2, view_col3 = st.columns([1, 1, 3], vertical_alignment="bottom")
     with view_col1:
         filter_date = st.date_input(
             "Filter by date", value=datetime.date.today(), key="filter_date"
         )
-        show_all = st.checkbox("Show all dates")
-        if st.button("Refresh"):
-            st.rerun()
-
     with view_col2:
-        if show_all:
-            df = get_entries(conn, None)
-        else:
-            df = get_entries(conn, filter_date.isoformat())
+        if st.button("Refresh", icon=":material/refresh:"):
+            st.rerun()
+    with view_col3:
+        show_all = st.checkbox("Show all")
 
-        if df.empty:
-            st.info("No entries found for the selected date")
-        else:
-            display_df = df.copy()
-            display_df["date"] = pd.to_datetime(display_df["date"]).dt.date
-            st.dataframe(display_df.reset_index(drop=True))
-            total = sum_durations(display_df["duration"])
-            st.markdown(f"**Total time:** {total}")
+    if show_all:
+        df = get_entries(conn, None)
+    else:
+        df = get_entries(conn, filter_date.isoformat())
+
+    if df.empty:
+        st.info("No entries found for the selected date")
+    else:
+        display_df = df.copy()
+        display_df["date"] = pd.to_datetime(display_df["date"]).dt.date
+        st.dataframe(display_df.reset_index(drop=True))
+        total = sum_durations(display_df["duration"])
+        st.markdown(f"**Total time:** {total}")
+        remain_time = datetime.timedelta(hours=8) - datetime.timedelta(
+            hours=int(total.split(":")[0]),
+            minutes=int(total.split(":")[1]),
+            seconds=int(total.split(":")[2]),
+        )
+        if remain_time.total_seconds() > 0:
+            st.markdown(f"**Remaining time:** {str(remain_time)}")
 
 
 if __name__ == "__main__":
